@@ -1,78 +1,77 @@
 #include <iostream>
 #include <vector>
-#include <climits>
-#include <chrono>
-#include <cstdlib>
-#include <fstream>
 #include <limits>
+#include <chrono>
+#include <random>
+#include <fstream>
 
 using namespace std;
-using namespace chrono;
+using namespace std::chrono;
 
-// Function to compute the matrix chain multiplication cost using DP.
-long long matrixChainOrder(const vector<int>& p) {
-    int n = p.size() - 1; // number of matrices
-    // m[i][j] stores minimum scalar multiplication cost for matrices i through j
-    vector<vector<long long>> m(n + 1, vector<long long>(n + 1, 0));
+
+long long matrixChainOrder(const vector<int>& dims) {
+    int n = dims.size() - 1;            
+    vector<vector<long long>> cost(n, vector<long long>(n, 0));
+
     
-    // m[i][i] = 0 for all i (single matrix multiplication cost is zero)
-    // l is the chain length.
-    for (int l = 2; l <= n; l++) {
-        for (int i = 1; i <= n - l + 1; i++) {
+    for (int l = 2; l <= n; ++l) {
+        for (int i = 0; i + l - 1 < n; ++i) {
             int j = i + l - 1;
-            m[i][j] = numeric_limits<long long>::max();
-            for (int k = i; k < j; k++) {
-                long long q = m[i][k] + m[k+1][j] + static_cast<long long>(p[i-1]) * p[k] * p[j];
-                if(q < m[i][j])
-                    m[i][j] = q;
+            cost[i][j] = numeric_limits<long long>::max();
+            
+            // try splitting between k and k+1
+            for (int k = i; k < j; ++k) {
+                long long q = cost[i][k] + cost[k+1][j]
+                              + (long long)dims[i] * dims[k+1] * dims[j+1];
+                if (q < cost[i][j]) {
+                    cost[i][j] = q;
+                }
             }
         }
     }
-    
-    return m[1][n];
+    return cost[0][n-1];
 }
 
 int main() {
-    // Create output file to store results
+   
+    mt19937 rng(random_device{}());
+    uniform_int_distribution<int> dist(10, 100);
+
+   
     ofstream outFile("chain_multiplication_results.txt");
-    if(!outFile) {
-        cerr << "Error: Unable to open output file." << endl;
+    if (!outFile) {
+        cerr << "Error: cannot open output file." << endl;
         return 1;
     }
+
+ 
     
-    outFile << "Vertices\tTime(ms)" << endl;
-    cout << "Vertices\tTime(ms)" << endl;
+    outFile << "Matrices\tAvg Time (ms)" << endl;
+
     
-    // We'll vary n (number of matrices) from a small value up to some max.
-    // Each "n" means there are n matrices and (n+1) dimensions in array p.
-    // WARNING: Matrix chain multiplication is O(n^3); choose n accordingly.
     for (int n = 50; n <= 500; n += 10) {
-        int iterations = 10;
-        long long totalDuration = 0;
-        
-        for (int trial = 0; trial < iterations; trial++) {
-            // Create a random dimension array p of length n+1.
-            // We assume matrix dimensions between 10 and 100.
-            vector<int> p(n + 1);
-            for (int i = 0; i < n + 1; i++) {
-                p[i] = rand() % 91 + 10; // random int in [10, 100]
-            }
+        int trials = 10;
+        double totalTime = 0;
+        vector<int> dims(n + 1);
+        for (int i = 0; i <= n; ++i)
+            {dims[i] = dist(rng);}
+        for (int t = 0; t < trials; ++t) {
             
+
             auto start = high_resolution_clock::now();
-            long long cost = matrixChainOrder(p);
+            long long minCost = matrixChainOrder(dims);
             auto end = high_resolution_clock::now();
-            long long duration = duration_cast<microseconds>(end - start).count();
-            totalDuration += duration;
-            
-            // Optionally, print the cost (not required for time complexity)
-            // cout << "Cost: " << cost << endl;
+
+            double ms = duration_cast<duration<double, milli>>(end - start).count();
+            totalTime += ms;
         }
+
+        double avgTime = totalTime / trials;
         
-        double avgTime = totalDuration / static_cast<double>(iterations);
+        
         outFile << n << "\t\t" << avgTime << endl;
-        cout << n << "\t\t" << avgTime << " ms" << endl;
     }
-    
+
     outFile.close();
     return 0;
 }

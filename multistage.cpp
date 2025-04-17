@@ -1,68 +1,114 @@
 #include <iostream>
 #include <vector>
-#include <climits>
+#include <limits>
 #include <chrono>
-#include <cstdlib>
+#include <random>
 #include <fstream>
 
 using namespace std;
-using namespace chrono;
+using namespace std::chrono;
 
-const int INF = INT_MAX;
+const int INF = numeric_limits<int>::max();
 
-// FGraph algorithm
-void FGraph(int n, int k, vector<vector<int>> &c, vector<int> &p) {
+// Finds shortest path in a k-stage graph from vertex 1 to vertex n.
+// p[1..k] will hold the sequence of vertices in the shortest path through stages.
+void FGraph(int n, int k,
+            const vector<vector<int>>& costMatrix,
+            const vector<vector<int>>& stages,
+            vector<int>& p) {
     vector<int> cost(n + 1, INF);
-    vector<int> d(n + 1, -1);
-    cost[n] = 0;
+    vector<int> nextV(n + 1, -1);
+    cost[n] = 0;  // cost to reach end from end is 0
 
-    for (int j = n - 1; j >= 1; --j) {
-        for (int r = 1; r <= n; ++r) {
-            if (c[j][r] != INF && cost[j] > c[j][r] + cost[r]) {
-                cost[j] = c[j][r] + cost[r];
-                d[j] = r;
+    // Process vertices in reverse topological order (by stage)
+    for (int stage = k; stage >= 1; --stage) {
+        for (int u : stages[stage]) {
+            if (u == n) continue;
+            int best = INF;
+            int bestV = -1;
+            // Only edges from u go to vertices in next stage
+            if (stage < k) {
+                for (int v : stages[stage + 1]) {
+                    if (costMatrix[u][v] < INF && cost[v] + costMatrix[u][v] < best) {
+                        best = cost[v] + costMatrix[u][v];
+                        bestV = v;
+                    }
+                }
             }
+            cost[u] = best;
+            nextV[u] = bestV;
         }
     }
 
+    // Recover path
+    p.resize(k + 1);
     p[1] = 1;
-    p[k] = n;
-    for (int j = 2; j <= k - 1; ++j)
-        p[j] = d[p[j - 1]];
+    for (int stage = 2; stage <= k; ++stage) {
+        p[stage] = nextV[p[stage - 1]];
+    }
 }
 
-// Function to generate a random complete multistage graph
-void generateCompleteGraph(int n, vector<vector<int>> &c) {
-    for (int i = 1; i <= n - 1; ++i) {
-        for (int j = i + 1; j <= n; ++j) {
-            c[i][j] = rand() % 10 + 1;
+// Generate a random k-stage graph with total n vertices.
+// Distributes vertices evenly into k stages (first=1, last=n).
+void generateMultistageGraph(int n, int k,
+                             vector<vector<int>>& costMatrix,
+                             vector<vector<int>>& stages) {
+    int remaining = n - 2;
+    int base = remaining / (k - 2);
+    int extra = remaining % (k - 2);
+
+    stages.assign(k + 1, {});
+    stages[1].push_back(1);
+    stages[k].push_back(n);
+
+    int vid = 2;
+    for (int stage = 2; stage <= k - 1; ++stage) {
+        int cnt = base + (extra-- > 0 ? 1 : 0);
+        for (int i = 0; i < cnt; ++i) {
+            stages[stage].push_back(vid++);
+        }
+    }
+
+    costMatrix.assign(n + 1, vector<int>(n + 1, INF));
+    
+    mt19937 rng(random_device{}());
+    uniform_int_distribution<int> dist(1, 10);
+
+    for (int stage = 1; stage < k; ++stage) {
+        for (int u : stages[stage]) {
+            for (int v : stages[stage + 1]) {
+                costMatrix[u][v] = dist(rng);
+            }
         }
     }
 }
 
 int main() {
-    srand(time(0));
-    ofstream outFile("results.txt");
-    outFile << "Vertices\tTime(ms)" << endl;
+                         // number of stages
+    ofstream outFile("multistage_fixedk.txt");
+    outFile << "Vertices\tTime (ms)" << endl;
+    
 
-    for (int n = 50; n <= 30000; n += 50) {
-        int k = 4;
-        long long totalDuration = 0;
-
+    for (int n = 50; n <= 2000; n += 10) {
+        int k = 10;
+        long long totalDur = 0;
+        vector<vector<int>> costMatrix;
+        vector<vector<int>> stages;
+        generateMultistageGraph(n, k, costMatrix, stages);
+        vector<int> path;
         for (int trial = 0; trial < 100; ++trial) {
-            vector<vector<int>> c(n + 1, vector<int>(n + 1, INF));
-            generateCompleteGraph(n, c);
-            vector<int> p(k + 1);
+            
 
             auto start = high_resolution_clock::now();
-            FGraph(n, k, c, p);
+            FGraph(n, k, costMatrix, stages, path);
             auto end = high_resolution_clock::now();
-            totalDuration += duration_cast<microseconds>(end - start).count();
+            
+            totalDur += duration_cast<microseconds>(end - start).count();
         }
 
-        double averageTime = totalDuration / 100.0;
-        outFile << n << "\t\t" << averageTime << endl;
-        cout << n << "\t\t" << averageTime << " ms" << endl;
+        double avgMs = totalDur / 100.0;
+        
+        outFile << n << "\t\t" << avgMs << endl;
     }
 
     outFile.close();
