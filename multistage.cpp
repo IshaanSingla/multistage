@@ -10,23 +10,20 @@ using namespace std::chrono;
 
 const int INF = numeric_limits<int>::max();
 
-// Finds shortest path in a k-stage graph from vertex 1 to vertex n.
-// p[1..k] will hold the sequence of vertices in the shortest path through stages.
 void FGraph(int n, int k,
             const vector<vector<int>>& costMatrix,
             const vector<vector<int>>& stages,
             vector<int>& p) {
     vector<int> cost(n + 1, INF);
     vector<int> nextV(n + 1, -1);
-    cost[n] = 0;  // cost to reach end from end is 0
+    cost[n] = 0;
 
-    // Process vertices in reverse topological order (by stage)
     for (int stage = k; stage >= 1; --stage) {
         for (int u : stages[stage]) {
             if (u == n) continue;
             int best = INF;
             int bestV = -1;
-            // Only edges from u go to vertices in next stage
+           
             if (stage < k) {
                 for (int v : stages[stage + 1]) {
                     if (costMatrix[u][v] < INF && cost[v] + costMatrix[u][v] < best) {
@@ -40,16 +37,13 @@ void FGraph(int n, int k,
         }
     }
 
-    // Recover path
+   
     p.resize(k + 1);
     p[1] = 1;
     for (int stage = 2; stage <= k; ++stage) {
         p[stage] = nextV[p[stage - 1]];
     }
 }
-
-// Generate a random k-stage graph with total n vertices.
-// Distributes vertices evenly into k stages (first=1, last=n).
 void generateMultistageGraph(int n, int k,
                              vector<vector<int>>& costMatrix,
                              vector<vector<int>>& stages) {
@@ -84,7 +78,7 @@ void generateMultistageGraph(int n, int k,
 }
 
 int main() {
-                         // number of stages
+                        
     ofstream outFile("multistage_fixedk.txt");
     outFile << "Vertices\tTime (ms)" << endl;
     
